@@ -4,6 +4,7 @@
 import logging
 import os
 import shutil
+import signal
 import subprocess
 import sys
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -29,6 +30,27 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 console = Console()
+
+# Global flag for graceful shutdown
+_interrupted = False
+
+
+def signal_handler(signum, frame):  # noqa: ARG001
+    """
+    Handle interrupt signals (Ctrl+C) gracefully.
+
+    Parameters
+    ----------
+    signum : int
+        Signal number
+    frame : frame
+        Current stack frame
+    """
+    global _interrupted
+    if not _interrupted:
+        _interrupted = True
+        # Use print instead of console.print to avoid potential issues in signal handler
+        print("\nInterrupt received. Finishing current tasks and shutting down gracefully...", file=sys.stderr)
 
 # Check if exiftool is available
 _EXIFTOOL_AVAILABLE: Optional[bool] = None
@@ -423,6 +445,14 @@ def main(
     (preserving aspect ratio), copies EXIF metadata, and saves them to
     OUTPUT_DIR maintaining the same directory structure.
     """
+    # Register signal handlers for graceful shutdown
+    signal.signal(signal.SIGINT, signal_handler)
+    signal.signal(signal.SIGTERM, signal_handler)
+    
+    # Reset interrupted flag (declare global here for use throughout function)
+    global _interrupted
+    _interrupted = False
+    
     if not quiet:
         console.print(f"[bold green]Batch Image Resizer[/bold green]")
         console.print(f"Input: {input_dir}")
@@ -465,58 +495,91 @@ def main(
     # Process images in parallel
     success_count = 0
     fail_count = 0
+    total_processed = 0
 
-    with Progress(
-        SpinnerColumn(),
-        TextColumn("[progress.description]{task.description}"),
-        BarColumn(),
-        TextColumn("[progress.percentage]{task.percentage:>3.0f}%"),
-        TimeElapsedColumn(),
-        console=console,
-        disable=quiet,
-    ) as progress:
-        task = progress.add_task("[cyan]Processing images...", total=len(images))
+    try:
+        with Progress(
+            SpinnerColumn(),
+            TextColumn("[progress.description]{task.description}"),
+            BarColumn(),
+            TextColumn("[progress.percentage]{task.percentage:>3.0f}%"),
+            TimeElapsedColumn(),
+            console=console,
+            disable=quiet,
+        ) as progress:
+            task = progress.add_task("[cyan]Processing images...", total=len(images))
 
-        with ThreadPoolExecutor(max_workers=workers) as executor:
-            futures = {
-                executor.submit(
-                    process_image,
-                    img,
-                    input_dir,
-                    output_dir,
-                    max_size,
-                    quality,
-                    resume,
-                ): img
-                for img in images
-            }
+            with ThreadPoolExecutor(max_workers=workers) as executor:
+                futures = {
+                    executor.submit(
+                        process_image,
+                        img,
+                        input_dir,
+                        output_dir,
+                        max_size,
+                        quality,
+                        resume,
+                    ): img
+                    for img in images
+                }
 
-            for future in as_completed(futures):
-                img = futures[future]
-                try:
-                    success, status = future.result()
-                    if success:
-                        success_count += 1
-                    else:
-                        fail_count += 1
+                for future in as_completed(futures):
+                    # Check for interruption
+                    if _interrupted:
                         if not quiet:
-                            console.print(f"[red]Failed:[/red] {img.name} - {status}")
-                except Exception as e:
-                    fail_count += 1
-                    if not quiet:
-                        console.print(f"[red]Error:[/red] {img.name} - {e}")
-                finally:
-                    progress.update(task, advance=1)
+                            console.print("\n[yellow]Cancelling remaining tasks...[/yellow]")
+                        # Cancel remaining futures
+                        for f in futures:
+                            f.cancel()
+                        break
+
+                    img = futures[future]
+                    try:
+                        success, status = future.result()
+                        total_processed += 1
+                        if success:
+                            success_count += 1
+                        else:
+                            fail_count += 1
+                            if not quiet:
+                                console.print(f"[red]Failed:[/red] {img.name} - {status}")
+                    except Exception as e:
+                        fail_count += 1
+                        total_processed += 1
+                        if not quiet:
+                            console.print(f"[red]Error:[/red] {img.name} - {e}")
+                    finally:
+                        progress.update(task, advance=1)
+
+    except KeyboardInterrupt:
+        # Fallback for KeyboardInterrupt if signal handler didn't catch it
+        if not quiet:
+            console.print("\n[yellow]Interrupt received. Shutting down...[/yellow]")
+        # Set interrupted flag (already declared global in main())
+        _interrupted = True
 
     # Summary
     if not quiet:
-        console.print(f"\n[bold green]Complete![/bold green]")
-        console.print(f"Success: {success_count}")
-        if fail_count > 0:
-            console.print(f"[red]Failed: {fail_count}[/red]")
+        if _interrupted:
+            console.print(f"\n[yellow]Interrupted![/yellow]")
+            console.print(f"Processed: {total_processed} of {len(images)}")
+            console.print(f"Success: {success_count}")
+            if fail_count > 0:
+                console.print(f"[red]Failed: {fail_count}[/red]")
+            console.print("[yellow]You can resume processing with the same command (resume is enabled by default)[/yellow]")
+        else:
+            console.print(f"\n[bold green]Complete![/bold green]")
+            console.print(f"Success: {success_count}")
+            if fail_count > 0:
+                console.print(f"[red]Failed: {fail_count}[/red]")
 
-    if fail_count > 0:
+    # Exit with appropriate code
+    if _interrupted:
+        sys.exit(130)  # Standard exit code for SIGINT
+    elif fail_count > 0:
         sys.exit(1)
+    else:
+        sys.exit(0)
 
 
 if __name__ == "__main__":
