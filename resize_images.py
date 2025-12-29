@@ -9,6 +9,7 @@ from pathlib import Path
 from typing import List, Optional, Tuple
 
 import click
+from exiftool import ExifToolHelper
 from PIL import Image
 from rich.console import Console
 from rich.logging import RichHandler
@@ -135,7 +136,7 @@ def resize_image(
 
 def copy_exif(source_path: Path, output_path: Path) -> bool:
     """
-    Copy EXIF metadata from source to output image.
+    Copy EXIF metadata from source to output image using exiftool.
 
     Parameters
     ----------
@@ -150,15 +151,21 @@ def copy_exif(source_path: Path, output_path: Path) -> bool:
         True if EXIF copied successfully, False otherwise
     """
     try:
-        import piexif
-
-        exif_dict = piexif.load(str(source_path))
-        exif_bytes = piexif.dump(exif_dict)
-        piexif.insert(exif_bytes, str(output_path))
+        with ExifToolHelper() as et:
+            # Use exiftool's -tagsFromFile to copy all metadata
+            # -all:all copies all metadata tags from source to destination
+            # -overwrite_original avoids creating backup files
+            et.execute(
+                "-tagsFromFile",
+                str(source_path),
+                "-all:all",
+                "-overwrite_original",
+                str(output_path),
+            )
         return True
-    except Exception as piexif_error:
+    except Exception as exiftool_error:
         logger.warning(
-            f"Failed to copy EXIF from {source_path} to {output_path}: {piexif_error}",
+            f"Failed to copy EXIF from {source_path} to {output_path}: {exiftool_error}",
             exc_info=True,
         )
         return False
