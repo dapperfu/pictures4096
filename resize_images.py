@@ -11,10 +11,13 @@ from pathlib import Path
 from typing import List, Optional, Tuple
 
 import click
-from PIL import Image
+from PIL import Image, ImageFile
 from rich.console import Console
 from rich.logging import RichHandler
 from rich.progress import Progress, SpinnerColumn, BarColumn, TextColumn, TimeElapsedColumn
+
+# Enable loading truncated images (some images may be slightly corrupted but still usable)
+ImageFile.LOAD_TRUNCATED_IMAGES = True
 
 # Configure logging
 logging.basicConfig(
@@ -124,6 +127,8 @@ def get_image_info(image_path: Path) -> Tuple[int, int, str]:
     """
     try:
         with Image.open(image_path) as img:
+            # Load image data to verify it's readable
+            img.load()
             return img.width, img.height, img.format or "UNKNOWN"
     except Exception as e:
         logger.error(f"Failed to get info for {image_path}: {e}")
@@ -138,6 +143,9 @@ def resize_image(
 ) -> bool:
     """
     Resize image preserving aspect ratio if larger than max_size.
+
+    Handles truncated and corrupted images gracefully by attempting to load
+    and save what can be recovered.
 
     Parameters
     ----------
@@ -156,21 +164,54 @@ def resize_image(
         True if successful, False otherwise
     """
     try:
+        # Try to load the image (LOAD_TRUNCATED_IMAGES is enabled globally)
         with Image.open(source_path) as img:
+            # Load the image data to verify it's readable
+            img.load()
+            
             width, height = img.size
 
             # If image is smaller than max_size, just copy it
             if width <= max_size and height <= max_size:
-                img.save(output_path, quality=quality, exif=img.info.get("exif"))
+                # Try to preserve EXIF if available
+                exif_data = img.info.get("exif")
+                try:
+                    img.save(output_path, quality=quality, exif=exif_data)
+                except Exception as save_error:
+                    # If saving with EXIF fails, try without
+                    logger.warning(
+                        f"Failed to save with EXIF for {source_path}, trying without: {save_error}"
+                    )
+                    img.save(output_path, quality=quality)
                 return True
 
             # Resize preserving aspect ratio
             img.thumbnail((max_size, max_size), Image.Resampling.LANCZOS)
-            img.save(output_path, quality=quality, exif=img.info.get("exif"))
+            # Try to preserve EXIF if available
+            exif_data = img.info.get("exif")
+            try:
+                img.save(output_path, quality=quality, exif=exif_data)
+            except Exception as save_error:
+                # If saving with EXIF fails, try without
+                logger.warning(
+                    f"Failed to save with EXIF for {source_path}, trying without: {save_error}"
+                )
+                img.save(output_path, quality=quality)
             return True
 
+    except Image.UnidentifiedImageError:
+        logger.warning(
+            f"Cannot identify image file (may be corrupted): {source_path}"
+        )
+        return False
     except Exception as e:
-        logger.error(f"Failed to resize {source_path}: {e}")
+        error_msg = str(e).lower()
+        if "truncated" in error_msg or "broken" in error_msg or "corrupt" in error_msg:
+            logger.warning(
+                f"Corrupted/truncated image (skipping): {source_path} - {e}"
+            )
+        else:
+            logger.error(f"Failed to resize {source_path}: {e}")
         return False
 
 
