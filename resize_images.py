@@ -3,13 +3,14 @@
 
 import logging
 import os
+import shutil
+import subprocess
 import sys
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 from typing import List, Optional, Tuple
 
 import click
-from exiftool import ExifToolHelper
 from PIL import Image
 from rich.console import Console
 from rich.logging import RichHandler
@@ -25,6 +26,45 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 console = Console()
+
+# Check if exiftool is available
+_EXIFTOOL_AVAILABLE: Optional[bool] = None
+_EXIFTOOL_PATH: Optional[str] = None
+
+
+def check_exiftool() -> Tuple[bool, Optional[str]]:
+    """
+    Check if exiftool is available on the system.
+
+    Returns
+    -------
+    Tuple[bool, Optional[str]]
+        (is_available, exiftool_path)
+    """
+    global _EXIFTOOL_AVAILABLE, _EXIFTOOL_PATH
+
+    if _EXIFTOOL_AVAILABLE is not None:
+        return _EXIFTOOL_AVAILABLE, _EXIFTOOL_PATH
+
+    # Check if exiftool is in PATH
+    exiftool_path = shutil.which("exiftool")
+    if exiftool_path:
+        _EXIFTOOL_AVAILABLE = True
+        _EXIFTOOL_PATH = exiftool_path
+        return True, exiftool_path
+
+    # Try common alternative names
+    for name in ["exiftool", "exiftool.exe"]:
+        exiftool_path = shutil.which(name)
+        if exiftool_path:
+            _EXIFTOOL_AVAILABLE = True
+            _EXIFTOOL_PATH = exiftool_path
+            return True, exiftool_path
+
+    _EXIFTOOL_AVAILABLE = False
+    _EXIFTOOL_PATH = None
+    return False, None
+
 
 # Supported image formats by Pillow
 SUPPORTED_FORMATS = {
@@ -150,19 +190,49 @@ def copy_exif(source_path: Path, output_path: Path) -> bool:
     bool
         True if EXIF copied successfully, False otherwise
     """
+    # Check if exiftool is available
+    exiftool_available, exiftool_path = check_exiftool()
+    if not exiftool_available or not exiftool_path:
+        logger.warning(
+            f"exiftool not found in PATH. EXIF metadata will not be copied. "
+            f"Please install exiftool: https://exiftool.org/"
+        )
+        return False
+
     try:
-        with ExifToolHelper() as et:
-            # Use exiftool's -tagsFromFile to copy all metadata
-            # -all:all copies all metadata tags from source to destination
-            # -overwrite_original avoids creating backup files
-            et.execute(
+        # Use exiftool's -tagsFromFile to copy all metadata
+        # -all:all copies all metadata tags from source to destination
+        # -overwrite_original avoids creating backup files
+        # -q (quiet) suppresses normal informational messages
+        result = subprocess.run(
+            [
+                exiftool_path,
                 "-tagsFromFile",
                 str(source_path),
                 "-all:all",
                 "-overwrite_original",
+                "-q",  # Quiet mode
                 str(output_path),
+            ],
+            capture_output=True,
+            text=True,
+            timeout=30,  # 30 second timeout
+        )
+
+        if result.returncode == 0:
+            return True
+        else:
+            logger.warning(
+                f"exiftool failed for {source_path} -> {output_path}: "
+                f"{result.stderr.strip() if result.stderr else 'Unknown error'}"
             )
-        return True
+            return False
+
+    except subprocess.TimeoutExpired:
+        logger.warning(
+            f"exiftool timed out while copying EXIF from {source_path} to {output_path}"
+        )
+        return False
     except Exception as exiftool_error:
         logger.warning(
             f"Failed to copy EXIF from {source_path} to {output_path}: {exiftool_error}",
