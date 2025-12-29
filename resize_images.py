@@ -507,7 +507,10 @@ def main(
             console=console,
             disable=quiet,
         ) as progress:
-            task = progress.add_task("[cyan]Processing images...", total=len(images))
+            task = progress.add_task(
+                f"[cyan]Processing images... (0 / {len(images)})[/cyan]",
+                total=len(images),
+            )
 
             with ThreadPoolExecutor(max_workers=workers) as executor:
                 futures = {
@@ -542,14 +545,21 @@ def main(
                         else:
                             fail_count += 1
                             if not quiet:
+                                # Print failure on a separate line (Rich will keep progress bar visible)
                                 console.print(f"[red]Failed:[/red] {img.name} - {status}")
                     except Exception as e:
                         fail_count += 1
                         total_processed += 1
                         if not quiet:
+                            # Print error on a separate line
                             console.print(f"[red]Error:[/red] {img.name} - {e}")
                     finally:
-                        progress.update(task, advance=1)
+                        # Update progress with current count
+                        progress.update(
+                            task,
+                            advance=1,
+                            description=f"[cyan]Processing images... ({total_processed} / {len(images)})[/cyan]",
+                        )
 
     except KeyboardInterrupt:
         # Fallback for KeyboardInterrupt if signal handler didn't catch it
