@@ -192,9 +192,10 @@ make clean
 - Python 3.10+
 - click >= 8.1.0
 - Pillow >= 10.0.0
-- PyExifTool >= 0.5.6
 - rich >= 13.0.0
 - exiftool >= 12.15 (system dependency - must be installed separately)
+
+**Note:** The script uses exiftool directly via subprocess, so exiftool must be installed and available in your system PATH.
 
 ## License
 
