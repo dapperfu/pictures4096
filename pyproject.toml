@@ -11,13 +11,6 @@ dependencies = [
     "rich>=13.0.0",
 ]
 
-[project.scripts]
-resize-images = "resize_images:main"
-
-[build-system]
-requires = ["hatchling"]
-build-backend = "hatchling.build"
-
 [tool.mypy]
 python_version = "3.10"
 warn_return_any = true
