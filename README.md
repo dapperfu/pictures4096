@@ -19,6 +19,32 @@ A Python CLI tool for batch resizing images to a maximum dimension (default 4096
 
 - Python 3.10 or higher
 - pip or uv package manager
+- exiftool command-line tool (required for EXIF metadata handling)
+
+### Installing exiftool
+
+**Linux (Ubuntu/Debian):**
+```bash
+sudo apt install libimage-exiftool-perl
+```
+
+**Linux (CentOS/RHEL):**
+```bash
+sudo yum install perl-Image-ExifTool
+```
+
+**macOS:**
+```bash
+brew install exiftool
+```
+
+**Windows:**
+Download from https://exiftool.org/ and add to PATH
+
+Verify installation:
+```bash
+exiftool -ver
+```
 
 ### Setup
 
@@ -166,8 +192,9 @@ make clean
 - Python 3.10+
 - click >= 8.1.0
 - Pillow >= 10.0.0
-- piexif >= 1.1.3
+- PyExifTool >= 0.5.6
 - rich >= 13.0.0
+- exiftool >= 12.15 (system dependency - must be installed separately)
 
 ## License
 
