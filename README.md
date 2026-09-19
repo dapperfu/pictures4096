@@ -26,7 +26,7 @@ The supported implementation is a Rust `pictures4096` binary. The original Pytho
 make install
 ```
 
-This builds the release binary and installs `pictures4096` to `${HOME}/.local/bin` and `~/.cargo/bin`.
+This builds the release binary and installs `pictures4096` to `~/.local/bin/`.
 
 ```bash
 pictures4096 --help
