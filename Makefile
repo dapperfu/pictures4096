@@ -1,4 +1,4 @@
-.PHONY: clean build run test test-verbose test-doc test-coverage lint lint-fix format fmt-check check help install install-python bench
+.PHONY: clean build run test test-verbose test-doc test-coverage lint lint-fix format fmt-check check help install install-python bench bench-exif prepare-bench-src
 
 CARGO ?= cargo
 PREFIX ?= ${HOME}/.local
@@ -12,6 +12,9 @@ PICTURES_DIR ?= ${HOME}/Desktop/Pictures
 BENCH_SRC := /tmp/pictures4096-bench-src
 BENCH_PY := /tmp/pictures4096-bench-py
 BENCH_RS := /tmp/pictures4096-bench-rs
+BENCH_PLAIN := /tmp/pictures4096-bench-plain
+BENCH_EXIF_PY := /tmp/pictures4096-bench-exif-py
+BENCH_EXIF_RS := /tmp/pictures4096-bench-exif-rs
 
 help:
 	@echo "Available targets:"
@@ -21,7 +24,8 @@ help:
 	@echo "  make test           - Run Rust tests"
 	@echo "  make lint           - Run Clippy with warnings denied"
 	@echo "  make format         - Format Rust code"
-	@echo "  make bench          - Compare Rust vs Python on N photos (N=50)"
+	@echo "  make bench          - Compare Rust vs Python resize+EXIF on N photos (N=50)"
+	@echo "  make bench-exif     - Compare exiftool vs fast-exif-rs EXIF writes"
 	@echo "  make install-python - Install the legacy Python tool into .venv"
 	@echo "  make clean          - Remove build artifacts and virtualenv"
 
@@ -76,12 +80,12 @@ format: rustfmt.toml
 fmt-check: rustfmt.toml
 	${CARGO} fmt --check
 
-bench: ${RELEASE_BIN} ${VENV}
+prepare-bench-src:
 	@if [ ! -d "${PICTURES_DIR}" ]; then \
 		echo "Pictures directory not found: ${PICTURES_DIR}"; \
 		exit 1; \
 	fi
-	rm -rf ${BENCH_SRC} ${BENCH_PY} ${BENCH_RS}
+	rm -rf ${BENCH_SRC}
 	mkdir -p ${BENCH_SRC}
 	@echo "Preparing ${N} hardlinked photos from ${PICTURES_DIR}"
 	find "${PICTURES_DIR}" -type f \( \
@@ -95,17 +99,32 @@ bench: ${RELEASE_BIN} ${VENV}
 	@count=$$(find ${BENCH_SRC} -type f | wc -l); \
 	echo "Benchmark set: $${count} files"; \
 	if [ "$${count}" -eq 0 ]; then echo "No images found to benchmark"; exit 1; fi
-	@echo "=== Python ==="
+
+bench: ${RELEASE_BIN} ${VENV} prepare-bench-src
+	@echo "=== Python resize + exiftool ==="
 	rm -rf ${BENCH_PY}
 	/usr/bin/time -f 'python wall seconds: %e' ${PYTHON} resize_images.py --no-resume --workers $$(nproc) "${BENCH_SRC}" "${BENCH_PY}"
-	@echo "=== Rust ==="
+	@echo "=== Rust resize + fast-exif-rs (default --copy-exif) ==="
 	rm -rf ${BENCH_RS}
 	/usr/bin/time -f 'rust wall seconds: %e' ${RELEASE_BIN} --no-resume --workers $$(nproc) "${BENCH_SRC}" "${BENCH_RS}"
 	@echo "Python outputs: $$(find ${BENCH_PY} -type f | wc -l)"
 	@echo "Rust outputs:   $$(find ${BENCH_RS} -type f | wc -l)"
 
+bench-exif: ${RELEASE_BIN} ${VENV} prepare-bench-src
+	@echo "=== Prepare resized files without EXIF ==="
+	rm -rf ${BENCH_PLAIN} ${BENCH_EXIF_PY} ${BENCH_EXIF_RS}
+	${RELEASE_BIN} --no-resume --no-copy-exif --quiet --workers $$(nproc) "${BENCH_SRC}" "${BENCH_PLAIN}"
+	cp -a ${BENCH_PLAIN} ${BENCH_EXIF_PY}
+	cp -a ${BENCH_PLAIN} ${BENCH_EXIF_RS}
+	@echo "=== Python exiftool write ==="
+	/usr/bin/time -f 'python exiftool wall seconds: %e' ${PYTHON} scripts/copy_exif_exiftool.py "${BENCH_SRC}" "${BENCH_EXIF_PY}"
+	@echo "=== Rust fast-exif-rs write ==="
+	/usr/bin/time -f 'rust fast-exif-rs wall seconds: %e' ${RELEASE_BIN} --exif-only --no-resume --workers $$(nproc) "${BENCH_SRC}" "${BENCH_EXIF_RS}"
+	@echo "exiftool outputs:    $$(find ${BENCH_EXIF_PY} -type f | wc -l)"
+	@echo "fast-exif-rs outputs: $$(find ${BENCH_EXIF_RS} -type f | wc -l)"
+
 clean:
 	${CARGO} clean
 	rm -rf ${VENV}
 	rm -rf __pycache__ .mypy_cache .ruff_cache coverage pictures4096.egg-info
-	rm -rf ${BENCH_SRC} ${BENCH_PY} ${BENCH_RS}
+	rm -rf ${BENCH_SRC} ${BENCH_PY} ${BENCH_RS} ${BENCH_PLAIN} ${BENCH_EXIF_PY} ${BENCH_EXIF_RS}
