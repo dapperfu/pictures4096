@@ -1,8 +1,10 @@
 # pictures4096
 
-I shoot on a Nikon. A year of photos is thousands of 20+ megapixel JPEGs. I do not want those full-size files as the everyday copy — they eat disk and are slow to browse — but I also do not want a sloppy downscale that throws away date, camera, and the folder layout I already use.
+I shoot on a Nikon. The raw library is past 4TB. Two jobs matter: get a copy onto Backblaze without paying to store every original pixel, and keep a second copy on cheap 2–4TB drives that actually fill. The masters stay put; this makes the version you can afford to ship off-site and leave on a spare disk.
 
-4K is 3840 wide. Capping the long edge at 4096 keeps images sharp on a 4K screen (and a bit of headroom) while cutting most of the bulk. That is the whole point of this tool: take a photo tree, write a parallel tree of "fits in 4096" copies, keep EXIF.
+A year of 20+ megapixel JPEGs is already too big to browse as the everyday copy. I do not want a sloppy downscale that throws away date, camera, and the folder layout I already use.
+
+4K is 3840 wide. Capping the long edge at 4096 keeps images sharp on a 4K screen (and a bit of headroom) while cutting most of the bulk. That is the tool: take a photo tree, write a parallel tree of "fits in 4096" copies, keep EXIF, land at a size Backblaze and a 2–4TB drive can swallow.
 
 Python + Pillow + forking `exiftool` on every file works. It does not stay fun past a couple thousand frames. This rewrite is Rust, all cores, Lanczos resize, EXIF via [fast-exif-rs](https://github.com/dapperfu/fast-exif-rs) instead of Perl per image. Same job, less waiting.
 
