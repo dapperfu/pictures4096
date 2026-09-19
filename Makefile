@@ -1,8 +1,8 @@
 .PHONY: clean build run test test-verbose test-doc test-coverage lint lint-fix format fmt-check check help install install-python bench bench-exif prepare-bench-src
 
 CARGO ?= cargo
-PREFIX ?= ${HOME}/.local
-BINDIR ?= ${PREFIX}/bin
+BINDIR := ${HOME}/.local/bin
+INSTALLED_BIN := ${BINDIR}/pictures4096
 RELEASE_BIN := target/release/pictures4096
 VENV := .venv
 PYTHON := ${VENV}/bin/python
@@ -18,7 +18,7 @@ BENCH_EXIF_RS := /tmp/pictures4096-bench-exif-rs
 
 help:
 	@echo "Available targets:"
-	@echo "  make install        - Build and install the pictures4096 binary"
+	@echo "  make install        - Build and install pictures4096 to ~/.local/bin/"
 	@echo "  make build          - Build the release binary"
 	@echo "  make run            - Run pictures4096 (INPUT_DIR and OUTPUT_DIR required)"
 	@echo "  make test           - Run Rust tests"
@@ -37,10 +37,12 @@ build: ${RELEASE_BIN}
 check:
 	${CARGO} check
 
-install: ${RELEASE_BIN}
+${INSTALLED_BIN}: ${RELEASE_BIN}
 	mkdir -p ${BINDIR}
-	install -m 0755 ${RELEASE_BIN} ${BINDIR}/pictures4096
-	${CARGO} install --path . --force --locked
+	install -m 0755 ${RELEASE_BIN} ${INSTALLED_BIN}
+
+install: ${INSTALLED_BIN}
+	@echo "Installed ${INSTALLED_BIN}"
 
 ${VENV}:
 	python3 -m venv ${VENV}
