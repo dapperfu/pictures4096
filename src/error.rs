@@ -24,6 +24,10 @@ pub enum Error {
     /// Encoded bytes could not be written or validated.
     #[error("encode failed: {0}")]
     Encode(String),
+
+    /// EXIF copy via fast-exif-rs failed.
+    #[error("exif copy failed: {0}")]
+    Exif(String),
 }
 
 impl From<std::io::Error> for Error {

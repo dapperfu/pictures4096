@@ -21,6 +21,7 @@ use pictures4096::{BatchStats, Error};
 /// Batch-resize images so each edge fits a maximum size (default 4096).
 #[derive(Debug, Parser)]
 #[command(name = "pictures4096", version, about, long_about = None)]
+#[allow(clippy::struct_excessive_bools)] // clap flags: resume/quiet/exif on/off/only
 struct Cli {
     /// Folder to ingest recursively
     input_dir: PathBuf,
@@ -47,6 +48,15 @@ struct Cli {
     /// Process at most this many discovered files (sorted order)
     #[arg(long)]
     limit: Option<usize>,
+    /// Copy EXIF with fast-exif-rs (default: enabled)
+    #[arg(long = "copy-exif", default_value_t = true)]
+    copy_exif: bool,
+    /// Skip EXIF copy
+    #[arg(long = "no-copy-exif")]
+    no_copy_exif: bool,
+    /// Copy EXIF onto existing outputs only (no resize)
+    #[arg(long = "exif-only")]
+    exif_only: bool,
 }
 
 fn main() -> ExitCode {
@@ -79,6 +89,8 @@ fn run() -> Result<ExitCode> {
         format_filter: cli.format_filter,
         limit: cli.limit,
         workers: cli.workers,
+        copy_exif: cli.copy_exif && !cli.no_copy_exif,
+        exif_only: cli.exif_only,
     };
 
     let show_ui = !cli.quiet && std::io::stderr().is_terminal();
@@ -90,6 +102,16 @@ fn run() -> Result<ExitCode> {
         eprintln!("max-size: {}px", cli.max_size);
         eprintln!("quality:  {}", cli.quality);
         eprintln!("workers:  {}", pictures4096::process::worker_count(cli.workers));
+        eprintln!(
+            "exif:     {}",
+            if cli.exif_only {
+                "copy only (fast-exif-rs)"
+            } else if cli.copy_exif && !cli.no_copy_exif {
+                "copy (fast-exif-rs)"
+            } else {
+                "off"
+            }
+        );
     }
 
     let progress = if show_ui { Some(setup_progress()) } else { None };

@@ -23,6 +23,7 @@ path = "src/main.rs"
 anyhow = "1.0"
 clap = { version = "4.5", features = ["derive"] }
 ctrlc = "3.4"
+fast-exif-reader = { git = "https://github.com/dapperfu/fast-exif-rs" }
 fast_image_resize = { version = "5.1", features = ["image"] }
 image = { version = "0.25", default-features = false, features = ["jpeg", "png", "gif", "bmp", "tiff", "webp", "ico"] }
 indicatif = { version = "0.17", features = ["rayon"] }

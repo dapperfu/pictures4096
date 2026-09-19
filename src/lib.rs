@@ -15,6 +15,7 @@
 
 pub mod discover;
 pub mod error;
+pub mod exif;
 pub mod formats;
 pub mod geometry;
 pub mod jpeg_exif;

@@ -12,7 +12,6 @@ use image::{ColorType, DynamicImage, GenericImageView, ImageEncoder, ImageFormat
 use crate::error::Error;
 use crate::formats::extension_lower;
 use crate::geometry::fit_dimensions;
-use crate::jpeg_exif::{is_jpeg, merge_jpeg_metadata};
 
 thread_local! {
     static RESIZER: RefCell<Resizer> = RefCell::new(Resizer::new());
@@ -32,6 +31,7 @@ pub const DEFAULT_QUALITY: u8 = 95;
 /// * `output` - Destination path (parent should already exist)
 /// * `max_size` - Maximum edge length in pixels
 /// * `quality` - JPEG quality 1-100
+/// * `copy_exif` - Copy source EXIF onto the output with fast-exif-rs
 ///
 /// # Errors
 ///
@@ -43,19 +43,19 @@ pub const DEFAULT_QUALITY: u8 = 95;
 /// use std::path::Path;
 /// use pictures4096::resize::resize_image;
 ///
-/// let _ = resize_image(Path::new("in.jpg"), Path::new("out.jpg"), 4096, 95);
+/// let _ = resize_image(Path::new("in.jpg"), Path::new("out.jpg"), 4096, 95, true);
 /// ```
-pub fn resize_image(source: &Path, output: &Path, max_size: u32, quality: u8) -> Result<(), Error> {
+pub fn resize_image(source: &Path, output: &Path, max_size: u32, quality: u8, copy_exif: bool) -> Result<(), Error> {
     let bytes = std::fs::read(source)?;
     let image = decode_image(&bytes, source)?;
     let resized = resize_dynamic(&image, max_size)?;
     let encoded = encode_image(&resized, source, quality)?;
-    let encoded = if is_jpeg(&bytes) && is_jpeg(&encoded) {
-        merge_jpeg_metadata(&bytes, &encoded)
-    } else {
-        encoded
-    };
     std::fs::write(output, &encoded)?;
+    if copy_exif && crate::exif::copy_exif(source, output, output).is_err() {
+        if let Ok(merged) = crate::exif::copy_exif_bytes(&bytes, &encoded) {
+            std::fs::write(output, merged)?;
+        }
+    }
     validate_image(output)?;
     Ok(())
 }
@@ -239,7 +239,7 @@ mod tests {
         let img = DynamicImage::ImageRgb8(RgbImage::from_pixel(64, 32, image::Rgb([10, 20, 30])));
         let bytes = encode_image(&img, &source, 90).expect("encode src");
         std::fs::write(&source, bytes).expect("write src");
-        resize_image(&source, &dest, 16, 80).expect("resize");
+        resize_image(&source, &dest, 16, 80, false).expect("resize");
         let out = image::open(&dest).expect("open dest");
         assert!(out.width() <= 16);
         assert!(out.height() <= 16);

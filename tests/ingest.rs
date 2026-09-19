@@ -26,6 +26,8 @@ fn ingest_preserves_relative_layout_and_resume() {
         format_filter: None,
         limit: None,
         workers: Some(2),
+        copy_exif: false,
+        exif_only: false,
     };
     let first = ingest_folder(input.path(), output.path(), &options, &cancel, None).expect("first");
     assert_eq!(first.success, 1);

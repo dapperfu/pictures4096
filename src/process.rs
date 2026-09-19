@@ -25,6 +25,10 @@ pub struct IngestOptions {
     pub limit: Option<usize>,
     /// Rayon worker count; `None` uses every logical CPU.
     pub workers: Option<usize>,
+    /// Copy EXIF with fast-exif-rs (default on).
+    pub copy_exif: bool,
+    /// Only copy EXIF onto existing outputs (no resize).
+    pub exif_only: bool,
 }
 
 impl Default for IngestOptions {
@@ -36,6 +40,8 @@ impl Default for IngestOptions {
             format_filter: None,
             limit: None,
             workers: None,
+            copy_exif: true,
+            exif_only: false,
         }
     }
 }
@@ -202,7 +208,7 @@ pub fn process_one(source: &Path, input_dir: &Path, output_dir: &Path, options: 
         Err(_) => PathBuf::from(source.file_name().unwrap_or_default()),
     };
     let dest = output_dir.join(rel);
-    if options.resume && dest.exists() {
+    if options.resume && dest.exists() && !options.exif_only {
         return FileStatus::Skipped;
     }
     if let Some(parent) = dest.parent() {
@@ -210,7 +216,16 @@ pub fn process_one(source: &Path, input_dir: &Path, output_dir: &Path, options: 
             return FileStatus::Failed(error.to_string());
         }
     }
-    match resize_image(source, &dest, options.max_size, options.quality) {
+    if options.exif_only {
+        if !dest.exists() {
+            return FileStatus::Failed("output missing for --exif-only".to_owned());
+        }
+        return match crate::exif::copy_exif(source, &dest, &dest) {
+            Ok(()) => FileStatus::Success,
+            Err(error) => FileStatus::Failed(error.to_string()),
+        };
+    }
+    match resize_image(source, &dest, options.max_size, options.quality, options.copy_exif) {
         Ok(()) => FileStatus::Success,
         Err(error) => FileStatus::Failed(error.to_string()),
     }
@@ -259,6 +274,8 @@ mod tests {
                 format_filter: None,
                 limit: None,
                 workers: Some(2),
+                copy_exif: false,
+                exif_only: false,
             },
             &cancel,
             None,
