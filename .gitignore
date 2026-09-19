@@ -1,0 +1,32 @@
+# Python
+__pycache__/
+*.pyc
+.venv/
+*.egg-info/
+.mypy_cache/
+.ruff_cache/
+
+# Rust
+/target/
+**/*.rs.bk
+
+# Coverage
+/coverage/
+
+# LaTeX build artifacts
+*.aux
+*.log
+*.out
+*.toc
+*.bbl
+*.blg
+*.fdb_latexmk
+*.fls
+*.synctex.gz
+*.pdf
+*.dvi
+*.ps
+*.eps
+*.figlist
+*.makefile
+*.auxlock
