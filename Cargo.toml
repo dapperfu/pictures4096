@@ -1,0 +1,40 @@
+[package]
+name = "pictures4096"
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.80"
+authors = ["jed <jed@localhost.local>"]
+license = "MIT OR Apache-2.0"
+description = "Batch image resizer with EXIF preservation for archival purposes"
+readme = "README.md"
+repository = "ssh://git@nas.local:2222/jed/pictures4096.git"
+keywords = ["images", "resize", "exif", "archive"]
+categories = ["command-line-utilities", "multimedia::images"]
+
+[lib]
+name = "pictures4096"
+path = "src/lib.rs"
+
+[[bin]]
+name = "pictures4096"
+path = "src/main.rs"
+
+[dependencies]
+anyhow = "1.0"
+clap = { version = "4.5", features = ["derive"] }
+ctrlc = "3.4"
+fast_image_resize = { version = "5.1", features = ["image"] }
+image = { version = "0.25", default-features = false, features = ["jpeg", "png", "gif", "bmp", "tiff", "webp", "ico"] }
+indicatif = { version = "0.17", features = ["rayon"] }
+rayon = "1.10"
+thiserror = "2.0"
+walkdir = "2.5"
+
+[dev-dependencies]
+tempfile = "3.13"
+
+[profile.release]
+lto = true
+codegen-units = 1
+opt-level = 3
+panic = "abort"
