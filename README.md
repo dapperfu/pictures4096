@@ -1,6 +1,6 @@
 # pictures4096
 
-Batch image resizer that ingests a folder tree and writes copies whose longest edge fits a maximum size (default **4096** pixels). Aspect ratio is preserved. JPEG EXIF and other APPn segments are copied onto re-encoded JPEGs.
+Batch image resizer that ingests a folder tree and writes copies whose longest edge fits a maximum size (default **4096** pixels). Aspect ratio is preserved. EXIF is copied by default with [fast-exif-rs](https://github.com/dapperfu/fast-exif-rs) (`--copy-exif`).
 
 The supported implementation is a Rust `pictures4096` binary. The original Python script remains for comparison benchmarks.
 
@@ -12,7 +12,8 @@ The supported implementation is a Rust `pictures4096` binary. The original Pytho
 - Directory layout preserved
 - Resume by skipping existing outputs
 - `--limit` for sampling or benchmarks
-- JPEG APPn metadata merge after encode
+- Default `--copy-exif` using [fast-exif-rs](https://github.com/dapperfu/fast-exif-rs) (high-priority subset plus JPEG `APPn` fallback)
+- `--no-copy-exif` and `--exif-only` for isolated metadata writes
 
 ## Installation
 
@@ -59,6 +60,9 @@ pictures4096 [OPTIONS] <INPUT_DIR> <OUTPUT_DIR>
 --quiet             Hide progress bars
 --format <EXT>      Only this extension (for example .jpg)
 --limit <N>         Process only the first N discovered files
+--copy-exif         Copy EXIF with fast-exif-rs (default: on)
+--no-copy-exif      Skip EXIF copy
+--exif-only         Write EXIF onto existing outputs (no resize)
 ```
 
 ### Examples
@@ -94,8 +98,17 @@ make bench N=200 PICTURES_DIR=/path/to/photos
 
 The benchmark hardlinks the first `N` sorted images into `/tmp/pictures4096-bench-src`, then writes:
 
-- Python: `/tmp/pictures4096-bench-py`
-- Rust: `/tmp/pictures4096-bench-rs`
+- Python resize + exiftool: `/tmp/pictures4096-bench-py`
+- Rust resize + fast-exif-rs: `/tmp/pictures4096-bench-rs`
+
+Isolated EXIF write (same resized files, then metadata only):
+
+```bash
+make bench-exif N=100
+```
+
+- Python `exiftool -tagsFromFile`: `/tmp/pictures4096-bench-exif-py`
+- Rust `--exif-only` via fast-exif-rs: `/tmp/pictures4096-bench-exif-rs`
 
 ## Development
 
