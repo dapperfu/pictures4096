@@ -57,7 +57,7 @@ struct Cli {
     /// Copy EXIF onto existing outputs only (no resize)
     #[arg(long = "exif-only")]
     exif_only: bool,
-    /// Keep JPEG/PNG/etc. instead of writing AVIF `.heic` files
+    /// Keep JPEG/PNG/etc. instead of writing `.avif` files
     #[arg(long = "keep-format")]
     keep_format: bool,
     /// AVIF encode speed 1-10 (1 = smallest, 10 = fastest)
@@ -125,7 +125,7 @@ fn run() -> Result<ExitCode> {
             if cli.keep_format {
                 "same format as source"
             } else {
-                "AVIF in .heic (enhanced compression)"
+                "AVIF (.avif)"
             }
         );
         if !cli.keep_format {

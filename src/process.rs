@@ -8,7 +8,7 @@ use rayon::prelude::*;
 
 use crate::discover::discover_images;
 use crate::error::Error;
-use crate::formats::HEIC_EXTENSION;
+use crate::formats::AVIF_EXTENSION;
 use crate::resize::resize_image;
 
 /// Options for a batch ingest/resize run.
@@ -31,9 +31,9 @@ pub struct IngestOptions {
     pub copy_exif: bool,
     /// Only copy EXIF onto existing outputs (no resize).
     pub exif_only: bool,
-    /// Keep the source extension instead of writing `.heic` AVIF.
+    /// Keep the source extension instead of writing `.avif`.
     pub keep_format: bool,
-    /// rav1e speed 1-10 when writing AVIF/HEIC (lower is smaller).
+    /// rav1e speed 1-10 when writing AVIF (lower is smaller).
     pub avif_speed: u8,
 }
 
@@ -242,7 +242,7 @@ pub fn process_one(source: &Path, input_dir: &Path, output_dir: &Path, options: 
     }
 }
 
-/// Builds the output path, swapping the extension to `.heic` unless `keep_format`.
+/// Builds the output path, swapping the extension to `.avif` unless `keep_format`.
 ///
 /// # Examples
 ///
@@ -251,7 +251,7 @@ pub fn process_one(source: &Path, input_dir: &Path, output_dir: &Path, options: 
 /// use pictures4096::process::destination_path;
 ///
 /// let dest = destination_path(Path::new("/in/a/b.jpg"), Path::new("/in"), Path::new("/out"), false);
-/// assert_eq!(dest, Path::new("/out/a/b.heic"));
+/// assert_eq!(dest, Path::new("/out/a/b.avif"));
 /// ```
 #[must_use]
 pub fn destination_path(source: &Path, input_dir: &Path, output_dir: &Path, keep_format: bool) -> PathBuf {
@@ -261,7 +261,7 @@ pub fn destination_path(source: &Path, input_dir: &Path, output_dir: &Path, keep
     };
     let mut dest = output_dir.join(rel);
     if !keep_format {
-        dest.set_extension(HEIC_EXTENSION);
+        dest.set_extension(AVIF_EXTENSION);
     }
     dest
 }

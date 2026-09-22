@@ -36,7 +36,7 @@ pub const DEFAULT_AVIF_SPEED: u8 = 2;
 /// * `max_size` - Maximum edge length in pixels
 /// * `quality` - JPEG quality 1-100
 /// * `copy_exif` - Copy source EXIF onto the output with fast-exif-rs
-/// * `avif_speed` - rav1e speed 1-10 (ignored unless `output` is `.heic` / `.avif`)
+/// * `avif_speed` - rav1e speed 1-10 (ignored unless `output` is `.avif`)
 ///
 /// # Errors
 ///
@@ -48,7 +48,7 @@ pub const DEFAULT_AVIF_SPEED: u8 = 2;
 /// use std::path::Path;
 /// use pictures4096::resize::resize_image;
 ///
-/// let _ = resize_image(Path::new("in.jpg"), Path::new("out.heic"), 4096, 95, true, 2);
+/// let _ = resize_image(Path::new("in.jpg"), Path::new("out.avif"), 4096, 95, true, 2);
 /// ```
 pub fn resize_image(
     source: &Path,
@@ -309,16 +309,16 @@ mod tests {
     }
 
     #[test]
-    fn avif_heic_round_trip() {
+    fn avif_round_trip() {
         let dir = tempdir().expect("tempdir");
         let source = dir.path().join("big.jpg");
-        let dest = dir.path().join("out.heic");
+        let dest = dir.path().join("out.avif");
         let img = DynamicImage::ImageRgb8(RgbImage::from_pixel(24, 16, image::Rgb([40, 80, 120])));
         let bytes = encode_image(&img, &source, 90).expect("encode src");
         std::fs::write(&source, bytes).expect("write src");
-        resize_image(&source, &dest, 12, 50, false, 10).expect("heic");
+        resize_image(&source, &dest, 12, 50, false, 10).expect("avif");
         assert!(dest.exists());
-        let raw = std::fs::read(&dest).expect("read heic");
+        let raw = std::fs::read(&dest).expect("read avif");
         assert!(raw.windows(4).any(|chunk| chunk == b"ftyp"));
         assert!(raw
             .windows(4)

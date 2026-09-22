@@ -45,7 +45,7 @@ fn ingest_preserves_relative_layout_and_resume() {
 }
 
 #[test]
-fn ingest_writes_avif_heic_by_default() {
+fn ingest_writes_avif_by_default() {
     let input = tempdir().expect("input");
     let output = tempdir().expect("output");
     let src = input.path().join("shot.jpg");
@@ -70,7 +70,7 @@ fn ingest_writes_avif_heic_by_default() {
     )
     .expect("ingest");
     assert_eq!(stats.success, 1);
-    let dest = output.path().join("shot.heic");
+    let dest = output.path().join("shot.avif");
     assert!(dest.exists());
     assert!(!output.path().join("shot.jpg").exists());
 }

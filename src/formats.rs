@@ -8,8 +8,8 @@ pub const SUPPORTED_EXTENSIONS: &[&str] = &[
     "heif", "hif",
 ];
 
-/// File extension used for AVIF-in-HEIF outputs.
-pub const HEIC_EXTENSION: &str = "heic";
+/// File extension used for AV1 / AVIF outputs.
+pub const AVIF_EXTENSION: &str = "avif";
 
 /// Returns whether `path` is an AVIF or HEIF/HEIC output name.
 ///
@@ -19,7 +19,7 @@ pub const HEIC_EXTENSION: &str = "heic";
 /// use std::path::Path;
 /// use pictures4096::formats::is_heif_output;
 ///
-/// assert!(is_heif_output(Path::new("shot.heic")));
+/// assert!(is_heif_output(Path::new("shot.avif")));
 /// assert!(is_heif_output(Path::new("shot.AVIF")));
 /// assert!(!is_heif_output(Path::new("shot.jpg")));
 /// ```
