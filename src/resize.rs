@@ -6,19 +6,23 @@ use std::path::Path;
 
 use fast_image_resize::images::Image;
 use fast_image_resize::{FilterType, PixelType, ResizeAlg, ResizeOptions, Resizer};
+use image::codecs::avif::{AvifEncoder, ColorSpace};
 use image::codecs::jpeg::JpegEncoder;
 use image::{ColorType, DynamicImage, GenericImageView, ImageEncoder, ImageFormat, ImageReader};
 
 use crate::error::Error;
-use crate::formats::extension_lower;
+use crate::formats::{extension_lower, is_heif_output};
 use crate::geometry::fit_dimensions;
 
 thread_local! {
     static RESIZER: RefCell<Resizer> = RefCell::new(Resizer::new());
 }
 
-/// Default JPEG quality matching the Python tool.
+/// Default JPEG / AVIF quality (1-100).
 pub const DEFAULT_QUALITY: u8 = 95;
+
+/// Default rav1e speed (1 = smallest/slowest, 10 = fastest). Low = better compression.
+pub const DEFAULT_AVIF_SPEED: u8 = 2;
 
 /// Resize `source` into `output` so both edges fit in `max_size`.
 ///
@@ -32,6 +36,7 @@ pub const DEFAULT_QUALITY: u8 = 95;
 /// * `max_size` - Maximum edge length in pixels
 /// * `quality` - JPEG quality 1-100
 /// * `copy_exif` - Copy source EXIF onto the output with fast-exif-rs
+/// * `avif_speed` - rav1e speed 1-10 (ignored unless `output` is `.heic` / `.avif`)
 ///
 /// # Errors
 ///
@@ -43,13 +48,24 @@ pub const DEFAULT_QUALITY: u8 = 95;
 /// use std::path::Path;
 /// use pictures4096::resize::resize_image;
 ///
-/// let _ = resize_image(Path::new("in.jpg"), Path::new("out.jpg"), 4096, 95, true);
+/// let _ = resize_image(Path::new("in.jpg"), Path::new("out.heic"), 4096, 95, true, 2);
 /// ```
-pub fn resize_image(source: &Path, output: &Path, max_size: u32, quality: u8, copy_exif: bool) -> Result<(), Error> {
+pub fn resize_image(
+    source: &Path,
+    output: &Path,
+    max_size: u32,
+    quality: u8,
+    copy_exif: bool,
+    avif_speed: u8,
+) -> Result<(), Error> {
     let bytes = std::fs::read(source)?;
     let image = decode_image(&bytes, source)?;
     let resized = resize_dynamic(&image, max_size)?;
-    let encoded = encode_image(&resized, source, quality)?;
+    let encoded = if is_heif_output(output) {
+        encode_avif(&resized, quality, avif_speed)?
+    } else {
+        encode_image(&resized, source, quality)?
+    };
     std::fs::write(output, &encoded)?;
     if copy_exif && crate::exif::copy_exif(source, output, output).is_err() {
         if let Ok(merged) = crate::exif::copy_exif_bytes(&bytes, &encoded) {
@@ -188,6 +204,38 @@ pub fn encode_image(image: &DynamicImage, source: &Path, quality: u8) -> Result<
     Ok(encoded)
 }
 
+/// Encodes `image` as AVIF (AV1 in a HEIF container).
+///
+/// Speed 1 spends the most CPU for the smallest file. Encoding uses one rav1e
+/// thread so folder-level Rayon can own parallelism.
+///
+/// # Errors
+///
+/// Returns [`Error::Encode`] when ravif fails.
+///
+/// # Examples
+///
+/// ```
+/// use image::{DynamicImage, RgbImage};
+/// use pictures4096::resize::encode_avif;
+///
+/// let img = DynamicImage::ImageRgb8(RgbImage::from_pixel(4, 4, image::Rgb([1, 2, 3])));
+/// let bytes = encode_avif(&img, 60, 10).expect("avif");
+/// assert!(bytes.windows(4).any(|chunk| chunk == b"ftyp"));
+/// ```
+pub fn encode_avif(image: &DynamicImage, quality: u8, speed: u8) -> Result<Vec<u8>, Error> {
+    let quality = quality.clamp(1, 100);
+    let speed = speed.clamp(1, 10);
+    let rgba = image.to_rgba8();
+    let mut encoded = Vec::new();
+    let avif = AvifEncoder::new_with_speed_quality(&mut encoded, speed, quality)
+        .with_colorspace(ColorSpace::Bt709)
+        .with_num_threads(Some(1));
+    avif.write_image(rgba.as_raw(), rgba.width(), rgba.height(), ColorType::Rgba8.into())
+        .map_err(|error| Error::Encode(error.to_string()))?;
+    Ok(encoded)
+}
+
 /// Verifies that `path` decodes as an image.
 ///
 /// # Errors
@@ -203,6 +251,9 @@ pub fn encode_image(image: &DynamicImage, source: &Path, quality: u8) -> Result<
 /// assert!(validate_image(Path::new("/no/such/file.jpg")).is_err());
 /// ```
 pub fn validate_image(path: &Path) -> Result<(), Error> {
+    if is_heif_output(path) {
+        return validate_heif_container(path);
+    }
     ImageReader::open(path)
         .map_err(|error| Error::Encode(error.to_string()))?
         .with_guessed_format()
@@ -210,6 +261,17 @@ pub fn validate_image(path: &Path) -> Result<(), Error> {
         .decode()
         .map_err(|error| Error::Encode(error.to_string()))?;
     Ok(())
+}
+
+fn validate_heif_container(path: &Path) -> Result<(), Error> {
+    let bytes = std::fs::read(path)?;
+    if bytes.windows(4).any(|chunk| chunk == b"ftyp") {
+        return Ok(());
+    }
+    Err(Error::Encode(format!(
+        "output is not a HEIF/AVIF container: {}",
+        path.display()
+    )))
 }
 
 fn format_from_path(path: &Path) -> Option<ImageFormat> {
@@ -221,6 +283,7 @@ fn format_from_path(path: &Path) -> Option<ImageFormat> {
         "tif" | "tiff" => Some(ImageFormat::Tiff),
         "webp" => Some(ImageFormat::WebP),
         "ico" => Some(ImageFormat::Ico),
+        "avif" | "heic" | "heif" | "hif" => Some(ImageFormat::Avif),
         _ => None,
     }
 }
@@ -239,9 +302,26 @@ mod tests {
         let img = DynamicImage::ImageRgb8(RgbImage::from_pixel(64, 32, image::Rgb([10, 20, 30])));
         let bytes = encode_image(&img, &source, 90).expect("encode src");
         std::fs::write(&source, bytes).expect("write src");
-        resize_image(&source, &dest, 16, 80, false).expect("resize");
+        resize_image(&source, &dest, 16, 80, false, 10).expect("resize");
         let out = image::open(&dest).expect("open dest");
         assert!(out.width() <= 16);
         assert!(out.height() <= 16);
+    }
+
+    #[test]
+    fn avif_heic_round_trip() {
+        let dir = tempdir().expect("tempdir");
+        let source = dir.path().join("big.jpg");
+        let dest = dir.path().join("out.heic");
+        let img = DynamicImage::ImageRgb8(RgbImage::from_pixel(24, 16, image::Rgb([40, 80, 120])));
+        let bytes = encode_image(&img, &source, 90).expect("encode src");
+        std::fs::write(&source, bytes).expect("write src");
+        resize_image(&source, &dest, 12, 50, false, 10).expect("heic");
+        assert!(dest.exists());
+        let raw = std::fs::read(&dest).expect("read heic");
+        assert!(raw.windows(4).any(|chunk| chunk == b"ftyp"));
+        assert!(raw
+            .windows(4)
+            .any(|chunk| chunk == b"avif" || chunk == b"avis" || chunk == b"mif1"));
     }
 }

@@ -8,10 +8,12 @@ use rayon::prelude::*;
 
 use crate::discover::discover_images;
 use crate::error::Error;
+use crate::formats::HEIC_EXTENSION;
 use crate::resize::resize_image;
 
 /// Options for a batch ingest/resize run.
 #[derive(Debug, Clone)]
+#[allow(clippy::struct_excessive_bools)] // resume / copy_exif / exif_only / keep_format
 pub struct IngestOptions {
     /// Maximum output edge length.
     pub max_size: u32,
@@ -29,6 +31,10 @@ pub struct IngestOptions {
     pub copy_exif: bool,
     /// Only copy EXIF onto existing outputs (no resize).
     pub exif_only: bool,
+    /// Keep the source extension instead of writing `.heic` AVIF.
+    pub keep_format: bool,
+    /// rav1e speed 1-10 when writing AVIF/HEIC (lower is smaller).
+    pub avif_speed: u8,
 }
 
 impl Default for IngestOptions {
@@ -42,6 +48,8 @@ impl Default for IngestOptions {
             workers: None,
             copy_exif: true,
             exif_only: false,
+            keep_format: false,
+            avif_speed: crate::resize::DEFAULT_AVIF_SPEED,
         }
     }
 }
@@ -203,11 +211,7 @@ pub fn ingest_folder(
 /// ```
 #[must_use]
 pub fn process_one(source: &Path, input_dir: &Path, output_dir: &Path, options: &IngestOptions) -> FileStatus {
-    let rel = match source.strip_prefix(input_dir) {
-        Ok(path) => path.to_path_buf(),
-        Err(_) => PathBuf::from(source.file_name().unwrap_or_default()),
-    };
-    let dest = output_dir.join(rel);
+    let dest = destination_path(source, input_dir, output_dir, options.keep_format);
     if options.resume && dest.exists() && !options.exif_only {
         return FileStatus::Skipped;
     }
@@ -225,10 +229,41 @@ pub fn process_one(source: &Path, input_dir: &Path, output_dir: &Path, options: 
             Err(error) => FileStatus::Failed(error.to_string()),
         };
     }
-    match resize_image(source, &dest, options.max_size, options.quality, options.copy_exif) {
+    match resize_image(
+        source,
+        &dest,
+        options.max_size,
+        options.quality,
+        options.copy_exif,
+        options.avif_speed,
+    ) {
         Ok(()) => FileStatus::Success,
         Err(error) => FileStatus::Failed(error.to_string()),
     }
+}
+
+/// Builds the output path, swapping the extension to `.heic` unless `keep_format`.
+///
+/// # Examples
+///
+/// ```
+/// use std::path::Path;
+/// use pictures4096::process::destination_path;
+///
+/// let dest = destination_path(Path::new("/in/a/b.jpg"), Path::new("/in"), Path::new("/out"), false);
+/// assert_eq!(dest, Path::new("/out/a/b.heic"));
+/// ```
+#[must_use]
+pub fn destination_path(source: &Path, input_dir: &Path, output_dir: &Path, keep_format: bool) -> PathBuf {
+    let rel = match source.strip_prefix(input_dir) {
+        Ok(path) => path.to_path_buf(),
+        Err(_) => PathBuf::from(source.file_name().unwrap_or_default()),
+    };
+    let mut dest = output_dir.join(rel);
+    if !keep_format {
+        dest.set_extension(HEIC_EXTENSION);
+    }
+    dest
 }
 
 /// Resolves the worker count, defaulting to every logical CPU (at least 1).
@@ -276,6 +311,8 @@ mod tests {
                 workers: Some(2),
                 copy_exif: false,
                 exif_only: false,
+                keep_format: true,
+                avif_speed: 10,
             },
             &cancel,
             None,

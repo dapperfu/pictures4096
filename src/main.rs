@@ -57,6 +57,12 @@ struct Cli {
     /// Copy EXIF onto existing outputs only (no resize)
     #[arg(long = "exif-only")]
     exif_only: bool,
+    /// Keep JPEG/PNG/etc. instead of writing AVIF `.heic` files
+    #[arg(long = "keep-format")]
+    keep_format: bool,
+    /// AVIF encode speed 1-10 (1 = smallest, 10 = fastest) [default: 2]
+    #[arg(long = "avif-speed", default_value_t = pictures4096::resize::DEFAULT_AVIF_SPEED)]
+    avif_speed: u8,
 }
 
 fn main() -> ExitCode {
@@ -91,6 +97,8 @@ fn run() -> Result<ExitCode> {
         workers: cli.workers,
         copy_exif: cli.copy_exif && !cli.no_copy_exif,
         exif_only: cli.exif_only,
+        keep_format: cli.keep_format,
+        avif_speed: cli.avif_speed,
     };
 
     let show_ui = !cli.quiet && std::io::stderr().is_terminal();
@@ -112,6 +120,17 @@ fn run() -> Result<ExitCode> {
                 "off"
             }
         );
+        eprintln!(
+            "codec:    {}",
+            if cli.keep_format {
+                "same format as source"
+            } else {
+                "AVIF in .heic (enhanced compression)"
+            }
+        );
+        if !cli.keep_format {
+            eprintln!("avif-speed: {}", cli.avif_speed);
+        }
     }
 
     let progress = if show_ui { Some(setup_progress()) } else { None };
