@@ -25,7 +25,7 @@ clap = { version = "4.5", features = ["derive"] }
 ctrlc = "3.4"
 fast-exif-reader = { git = "https://github.com/dapperfu/fast-exif-rs" }
 fast_image_resize = { version = "5.1", features = ["image"] }
-image = { version = "0.25", default-features = false, features = ["jpeg", "png", "gif", "bmp", "tiff", "webp", "ico"] }
+image = { version = "0.25", default-features = false, features = ["jpeg", "png", "gif", "bmp", "tiff", "webp", "ico", "avif"] }
 indicatif = { version = "0.17", features = ["rayon"] }
 rayon = "1.10"
 thiserror = "2.0"
