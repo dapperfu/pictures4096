@@ -4,7 +4,7 @@ I shoot on a Nikon. The raw library is past 4TB. Two jobs matter: get a copy ont
 
 A year of 20+ megapixel JPEGs is already too big to browse as the everyday copy. I do not want a sloppy downscale that throws away date, camera, and the folder layout I already use.
 
-4K is 3840 wide. Capping the long edge at 4096 keeps images sharp on a 4K screen (and a bit of headroom) while cutting most of the bulk. That is the tool: take a photo tree, write a parallel tree of "fits in 4096" copies, keep EXIF, land at a size Backblaze and a 2–4TB drive can swallow.
+4K is 3840 wide. Capping the long edge at 4096 keeps images sharp on a 4K screen (and a bit of headroom) while cutting most of the bulk. Outputs are AVIF (AV1) written as `.heic` — same HEIF box, much smaller than JPEG at the same quality. That is the tool: take a photo tree, write a parallel tree of 4096-fit HEIC files, keep EXIF, land at a size Backblaze and a 2–4TB drive can swallow.
 
 Python + Pillow + forking `exiftool` on every file works. It does not stay fun past a couple thousand frames. This rewrite is Rust, all cores, Lanczos resize, EXIF via [fast-exif-rs](https://github.com/dapperfu/fast-exif-rs) instead of Perl per image. Same job, less waiting.
 
@@ -30,10 +30,11 @@ pictures4096 --help
 pictures4096 ~/Desktop/Pictures ~/Pictures/4096
 ```
 
-Walks the input folder, writes the same relative paths under the output folder, long edge ≤ 4096, quality 95, EXIF copied. Failures print and the rest keep going.
+Walks the input folder, writes the same relative paths as `.heic` (AVIF encode, speed 2 by default — slower, smaller). Long edge ≤ 4096, quality 95, EXIF copied. Failures print and the rest keep going.
 
 ```bash
-pictures4096 --max-size 2048 --quality 90 photos photos_2k
+pictures4096 --max-size 2048 --quality 80 --avif-speed 1 photos photos_heic
+pictures4096 --keep-format in out           # leave JPEG/PNG as JPEG/PNG
 pictures4096 --no-copy-exif in out          # pixels only
 pictures4096 --no-resume in out             # overwrite
 pictures4096 --exif-only in out             # stamp EXIF onto files already there
