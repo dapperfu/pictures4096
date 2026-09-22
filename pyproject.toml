@@ -1,6 +1,6 @@
 [project]
 name = "pictures4096"
-version = "0.1.0"
+version = "0.1.1"
 description = "Batch image resizer with EXIF preservation for archival purposes"
 readme = "README.md"
 requires-python = ">=3.10"
