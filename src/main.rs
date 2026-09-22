@@ -60,7 +60,7 @@ struct Cli {
     /// Keep JPEG/PNG/etc. instead of writing AVIF `.heic` files
     #[arg(long = "keep-format")]
     keep_format: bool,
-    /// AVIF encode speed 1-10 (1 = smallest, 10 = fastest) [default: 2]
+    /// AVIF encode speed 1-10 (1 = smallest, 10 = fastest)
     #[arg(long = "avif-speed", default_value_t = pictures4096::resize::DEFAULT_AVIF_SPEED)]
     avif_speed: u8,
 }
